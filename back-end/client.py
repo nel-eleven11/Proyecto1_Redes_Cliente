@@ -29,7 +29,6 @@ class MCPClient:
     async def connect_to_server(self, server_script_path: str):
         """
         Connects to an MCP server
-
         """
 
         # Validate server python script
@@ -62,4 +61,28 @@ class MCPClient:
         ]
 
         return True
-        
+
+    # Get the different tools from de server
+    async def get_mcp_tools(self):
+        try:
+            self.logger.info("Requesting MCP tools from the server.")
+            response = await self.session.list_tools()
+            tools = response.tools
+            return tools
+        except Exception as e:
+            self.logger.error(f"Failed to get MCP tools: {str(e)}")
+            self.logger.debug(f"Error details: {traceback.format_exc()}")
+            raise Exception(f"Failed to get tools: {str(e)}")
+
+    
+    async def cleanup(self):
+        """
+        Clean up resources
+        """
+        try:
+            self.logger.info("Cleaning up resources")
+            await self.exit_stack.aclose()
+        except Exception as e:
+            self.logger.error(f"Error during cleanup: {str(e)}")
+            
+    
