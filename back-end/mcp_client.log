@@ -1,0 +1,14 @@
+2025-09-14 10:35:14,309 - MCPClient - INFO - Cleaning up resources
+2025-09-14 10:42:04,505 - MCPClient - INFO - Cleaning up resources
+2025-09-14 10:51:45,709 - MCPClient - INFO - Cleaning up resources
+2025-09-14 11:17:25,364 - MCPClient - INFO - Cleaning up resources
+2025-09-14 12:43:22,446 - MCPClient - INFO - Starting MCP server: /home/nelson/Documents/Uvg/Redes/Proyecto1_Redes_MCP/.venv/bin/python /home/nelson/Documents/Uvg/Redes/Proyecto1_Redes_MCP/server.py
+2025-09-14 12:43:23,419 - MCPClient - INFO - Cleaning up resources
+2025-09-14 12:45:10,983 - MCPClient - INFO - Starting MCP server: /home/nelson/Documents/Uvg/Redes/Proyecto1_Redes_MCP/.venv/bin/python /home/nelson/Documents/Uvg/Redes/Proyecto1_Redes_MCP/server.py
+2025-09-14 12:45:11,804 - MCPClient - INFO - Cleaning up resources
+2025-09-14 12:45:46,059 - MCPClient - INFO - Starting MCP server: /home/nelson/Documents/Uvg/Redes/Proyecto1_Redes_MCP/.venv/bin/python /home/nelson/Documents/Uvg/Redes/Proyecto1_Redes_MCP/server.py
+2025-09-14 12:45:46,874 - MCPClient - INFO - Cleaning up resources
+2025-09-14 12:53:02,051 - MCPClient - INFO - Starting MCP server with uv: uv run /home/nelson/Documents/Uvg/Redes/Proyecto1_Redes_MCP/server.py (cwd=/home/nelson/Documents/Uvg/Redes/Proyecto1_Redes_MCP)
+2025-09-14 12:53:10,417 - MCPClient - INFO - Requesting MCP tools from the server.
+2025-09-14 12:54:16,942 - MCPClient - INFO - Requesting MCP tools from the server.
+2025-09-14 12:55:22,640 - MCPClient - INFO - Cleaning up resources

@@ -7,6 +7,7 @@ from mcp.client.stdio import stdio_client
 from datetime import datetime
 import json
 import os
+from pathlib import Path
 
 from anthropic import Anthropic
 from anthropic.types import Message
@@ -26,7 +27,7 @@ class MCPClient:
         self.logger = logger
         
     # Connect to the mcp server
-    async def connect_to_server(self, server_script_path: str):
+    async def connect_to_server(self, server_script_path: str, server_cwd: Optional[str] = None):
         """
         Connects to an MCP server
         """
@@ -36,8 +37,16 @@ class MCPClient:
         if not (is_python):
             raise ValueError("Server script must be a .py file")
 
+        cwd = server_cwd or Path(server_script_path).parent.as_posix()
+
+        self.logger.info(f"Starting MCP server with uv: uv run {server_script_path} (cwd={cwd})")
+
+
         server_params = StdioServerParameters(
-            command="python", args=[server_script_path], env=None
+            command="uv", 
+            args=["run", server_script_path],
+            env=os.environ.copy(),
+            cwd=cwd,
         )
 
         stdio_transport = await self.exit_stack.enter_async_context(
@@ -61,6 +70,14 @@ class MCPClient:
         ]
 
         return True
+
+    async def call_tool(self, name: str, args: dict):
+        """
+        Helper the /tool endpoint expects
+        """
+        if not self.session:
+            raise RuntimeError("MCP session not initialized. Call connect_to_server first.")
+        return await self.session.call_tool(name, args)
 
     async def get_mcp_tools(self):
         """

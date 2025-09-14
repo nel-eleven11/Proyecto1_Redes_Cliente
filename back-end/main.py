@@ -7,16 +7,18 @@ from client import MCPClient
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 
+
 load_dotenv()
 
 class Settings(BaseSettings):
     server_script_path: str = "/home/nelson/Documents/Uvg/Redes/Proyecto1_Redes_MCP/server.py"
+    server_project_dir: str = "/home/nelson/Documents/Uvg/Redes/Proyecto1_Redes_MCP"
 
 settings = Settings()
 
 
 @asynccontextmanager
-async def lifespan():
+async def lifespan(app: FastAPI):
     """
     Manage client startup and shutdown
     """
@@ -25,7 +27,10 @@ async def lifespan():
     client = MCPClient()
 
     try:
-        connected = await client.connect_to_server(settings.server_script_path)
+        connected = await client.connect_to_server(
+            settings.server_script_path,
+            server_cwd=settings.server_project_dir,
+        )
         if not connected:
             raise Exception("Failed to connect to server")
         app.state.client = client
