@@ -62,8 +62,10 @@ class MCPClient:
 
         return True
 
-    # Get the different tools from de server
     async def get_mcp_tools(self):
+        """
+        Get the different tools from de server
+        """
         try:
             self.logger.info("Requesting MCP tools from the server.")
             response = await self.session.list_tools()
@@ -84,6 +86,22 @@ class MCPClient:
             await self.exit_stack.aclose()
         except Exception as e:
             self.logger.error(f"Error during cleanup: {str(e)}")
+
+    async def call_llm(self) -> Message:
+        """
+        Call the LLM with the given query
+        """
+        try:
+            return self.llm.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=1000,
+                messages=self.messages,
+                tools=self.tools,
+            )
+        except Exception as e:
+            self.logger.error(f"Failed to call LLM: {str(e)}")
+            raise Exception(f"Failed to call LLM: {str(e)}")
+
 
     async def process_query(self, query: str):
         """
@@ -170,6 +188,53 @@ class MCPClient:
                 f"Query processing error details: {traceback.format_exc()}"
             )
             raise
+
     
-            
-    
+    async def log_conversation(self, conversation: list):
+        """
+        Log the conversation to json file
+        """
+
+        # Create conversations directory if it doesn't exist
+        os.makedirs("conversations", exist_ok=True)
+
+        # Convert conversation to JSON-serializable format
+        serializable_conversation = []
+        for message in conversation:
+            try:
+                serializable_message = {
+                    "role": message["role"],
+                    "content": []
+                }
+                
+                # Handle both string and list content
+                if isinstance(message["content"], str):
+                    serializable_message["content"] = message["content"]                  
+                elif isinstance(message["content"], list):
+                    for content_item in message["content"]:
+                        if hasattr(content_item, 'to_dict'):
+                            serializable_message["content"].append(content_item.to_dict())
+                        elif hasattr(content_item, 'dict'):
+                            serializable_message["content"].append(content_item.dict())
+                        elif hasattr(content_item, 'model_dump'):
+                            serializable_message["content"].append(content_item.model_dump())
+                        else:
+                            serializable_message["content"].append(content_item)
+                
+                serializable_conversation.append(serializable_message)
+            except Exception as e:
+                self.logger.error(f"Error processing message: {str(e)}")
+                self.logger.debug(f"Message content: {message}")
+                raise
+
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filepath = os.path.join("conversations", f"conversation_{timestamp}.json")
+        
+        try:
+            with open(filepath, "w") as f:
+                json.dump(serializable_conversation, f, indent=2, default=str)
+        except Exception as e:
+            self.logger.error(f"Error writing conversation to file: {str(e)}")
+            self.logger.debug(f"Serializable conversation: {serializable_conversation}")
+            raise
+
