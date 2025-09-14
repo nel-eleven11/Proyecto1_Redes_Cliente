@@ -10,7 +10,7 @@ from pydantic_settings import BaseSettings
 load_dotenv()
 
 class Settings(BaseSettings):
-    server_script_path: str = ""
+    server_script_path: str = "/home/nelson/Documents/Uvg/Redes/Proyecto1_Redes_MCP/server.py"
 
 settings = Settings()
 
@@ -57,8 +57,8 @@ class ToolCall(BaseModel):
     name: str
     args: Dict[str, Any]
 
-
-async def process_query(request: ):
+@app.post("/query")
+async def process_query(request: QueryRequest):
     """
     Process a query and return the response
     """
@@ -70,6 +70,36 @@ async def process_query(request: ):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/tools")
+async def get_available_tools():
+    """
+    Get list of available tools from the server
+    """
+    try:
+        tools = await app.state.client.get_mcp_tools()
+        return {
+            "tools": [
+                {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "input_schema": tool.inputSchema,
+                }
+                for tool in tools
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/tool")
+async def call_tool(tool_call: ToolCall):
+    """
+    Call a specific tool from the server
+    """
+    try:
+        result = await app.state.client.call_tool(tool_call.name, tool_call.args)
+        return {"result": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
