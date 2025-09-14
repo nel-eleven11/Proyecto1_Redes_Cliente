@@ -1,3 +1,8 @@
 mcp 
 anthropic
 python-dotenv
+uvicorn
+pydantic
+pydantic-settings
+pydantic_core
+fastapi
