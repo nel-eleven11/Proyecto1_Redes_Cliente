@@ -3,3 +3,7 @@
 __pycache__/
 
 */.env
+
+back-end/conversations/
+
+back-end/mcp_client.log
