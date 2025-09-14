@@ -84,5 +84,92 @@ class MCPClient:
             await self.exit_stack.aclose()
         except Exception as e:
             self.logger.error(f"Error during cleanup: {str(e)}")
+
+    async def process_query(self, query: str):
+        """
+        Process a query using Claude and available tools, returning all messages at the end
+        """
+        try:
+            #  Log first 100 chars of query
+            self.logger.info(
+                f"Processing new query: {query[:100]}..."
+            )  
+
+            # Add the initial user message
+            user_message = {"role": "user", "content": query}
+            self.messages.append(user_message)
+            await self.log_conversation(self.messages)
+            messages = [user_message]
+
+            while True:
+                self.logger.debug("Calling Claude API")
+                response = await self.call_llm()
+
+                # If it's a simple text response
+                if response.content[0].type == "text" and len(response.content) == 1:
+                    assistant_message = {
+                        "role": "assistant",
+                        "content": response.content[0].text,
+                    }
+                    self.messages.append(assistant_message)
+                    await self.log_conversation(self.messages)
+                    messages.append(assistant_message)
+                    break
+
+                # For more complex responses with tool calls
+                assistant_message = {
+                    "role": "assistant",
+                    "content": response.to_dict()["content"],
+                }
+                self.messages.append(assistant_message)
+                await self.log_conversation(self.messages)
+                messages.append(assistant_message)
+
+                for content in response.content:
+                    if content.type == "text":
+                        # Text content within a complex response
+                        text_message = {"role": "assistant", "content": content.text}
+                        await self.log_conversation(self.messages)
+                        messages.append(text_message)
+                    elif content.type == "tool_use":
+                        tool_name = content.name
+                        tool_args = content.input
+                        tool_use_id = content.id
+
+                        self.logger.info(
+                            f"Executing tool: {tool_name} with args: {tool_args}"
+                        )
+                        try:
+                            # turn this one return a simple string
+                            result = await self.session.call_tool(tool_name, tool_args)
+                            self.logger.info(f"Tool result: {result}")
+                            # result = test_tool_result_content
+                            tool_result_message = {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "tool_result",
+                                        "tool_use_id": tool_use_id,
+                                        "content": result.content,
+                                    }
+                                ],
+                            }
+                            self.messages.append(tool_result_message)
+                            await self.log_conversation(self.messages)
+                            messages.append(tool_result_message)
+                        except Exception as e:
+                            error_msg = f"Tool execution failed: {str(e)}"
+                            self.logger.error(error_msg)
+                            raise Exception(error_msg)
+
+            return messages
+
+        except Exception as e:
+            self.logger.error(f"Error processing query: {str(e)}")
+            self.logger.debug(
+                f"Query processing error details: {traceback.format_exc()}"
+            )
+            raise
+    
             
     
