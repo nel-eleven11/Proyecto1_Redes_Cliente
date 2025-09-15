@@ -58,3 +58,39 @@ class Chatbot:
                 headers={"Content-Type": "application/json"},
             )
             return response.json()
+
+
+    async def render(self):
+        """
+        Render view
+        """
+        st.title("MCP Chatbot Redes")
+
+        with st.sidebar:
+            st.subheader("Settings")
+            st.write("API URL: ", self.api_url)
+            result = await self.get_tools()
+            st.subheader("Tools")
+            st.write([tool["name"] for tool in result["tools"]])
+
+        # Display existing messages
+        for message in self.messages:
+            self.display_message(message)
+
+        # Handle new query
+        query = st.chat_input("Enter your query here")
+        if query:
+            async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
+                try:
+                    response = await client.post(
+                        f"{self.api_url}/query",
+                        json={"query": query},
+                        headers={"Content-Type": "application/json"},
+                    )
+                    if response.status_code == 200:
+                        messages = response.json()["messages"]
+                        st.session_state["messages"] = messages
+                        for message in st.session_state["messages"]:
+                            self.display_message(message)
+                except Exception as e:
+                    st.error(f"Frontend: Error processing query: {str(e)}")
