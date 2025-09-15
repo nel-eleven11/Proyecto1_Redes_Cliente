@@ -27,13 +27,22 @@ class Chatbot:
                             f"**Tool executed:** `{self.current_tool_call['name']}`", help="Tool call result"
                         )
                         with st.expander("View result JSON", expanded=False):
-                            st.json(
-                                {
-                                    "tool": self.current_tool_call["name"],
-                                    "args": self.current_tool_call["args"],
-                                    "content": json.loads(content["content"][0]["text"]),
-                                }
-                            )
+                            items = content.get("content", [])
+                            if not items:
+                                st.caption("No content returned by tool.")
+                            else:
+                                for i, item in enumerate(items, start=1):
+                                    itype = item.get("type")
+                                    if itype == "json" and "json" in item:
+                                        st.markdown(f"**Item {i} (JSON):**")
+                                        st.json(item["json"])
+                                    elif itype == "text" and "text" in item:
+                                        st.markdown(f"**Item {i} (text):**")
+                                        # Show plain text
+                                        st.code(item["text"])
+                                    else:
+                                        st.markdown(f"**Item {i} (raw):**")
+                                        st.code(str(item))
 
         # Assistant text
         if message["role"] == "assistant" and isinstance(message["content"], str):
