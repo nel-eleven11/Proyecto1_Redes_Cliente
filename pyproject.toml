@@ -8,6 +8,7 @@ dependencies = [
     "anthropic>=0.67.0",
     "beautifulsoup4>=4.13.5",
     "fastapi>=0.116.1",
+    "fastmcp>=2.12.3",
     "mcp>=1.14.0",
     "python-dotenv>=1.1.1",
     "streamlit>=1.49.1",
