@@ -8,6 +8,7 @@ from datetime import datetime
 import json
 import os
 from pathlib import Path
+from fastmcp import Client as FastMCPClient
 
 from anthropic import Anthropic
 from anthropic.types import Message
@@ -19,17 +20,18 @@ class MCPClient:
     """
     def __init__(self):
         # Initialize session and client objects
-        self.session: Optional[ClientSession] = None
+        self.session: Optional[ClientSession] = None          
+        self.remote_client: Optional[FastMCPClient] = None   
         self.exit_stack = AsyncExitStack()
         self.llm = Anthropic()
         self.tools = []
         self.messages = []
         self.logger = logger
         
-    # Connect to the mcp server
+    # Connect to a local MCP server via stdio 
     async def connect_to_server(self, server_script_path: str, server_cwd: Optional[str] = None):
         """
-        Connects to an MCP server
+        Connects to an MCP server over stdio (local process).
         """
 
         # Validate server python script
@@ -40,7 +42,6 @@ class MCPClient:
         cwd = server_cwd or Path(server_script_path).parent.as_posix()
 
         self.logger.info(f"Starting MCP server with uv: uv run {server_script_path} (cwd={cwd})")
-
 
         server_params = StdioServerParameters(
             command="uv", 
@@ -71,23 +72,60 @@ class MCPClient:
 
         return True
 
+    # Connect to a remote MCP server via HTTP 
+    async def connect_to_remote_server(self, base_url: str):
+        """
+        Connects to a remote MCP server (HTTP) using FastMCP Client.
+        """
+        self.logger.info(f"Connecting to remote MCP server: {base_url}")
+
+        # Open FastMCP HTTP client in the same exit_stack for unified cleanup
+        self.remote_client = await self.exit_stack.enter_async_context(FastMCPClient(base_url))
+               
+        # Fetch and cache tools (same shape used by Anthropic tools param)
+        mcp_tools = await self.get_mcp_tools()
+        self.tools = [
+            {
+                "name": t.name,
+                "description": getattr(t, "description", "") or "",
+                "input_schema": getattr(t, "inputSchema", None) or getattr(t, "input_schema", None),
+            }
+            for t in mcp_tools
+        ]
+
+        self.logger.info("Connected to remote MCP server successfully.")
+        return True
+
     async def call_tool(self, name: str, args: dict):
         """
         Helper the /tool endpoint expects
         """
+        # Prefer remote if present
+        if self.remote_client:
+            return await self.remote_client.call_tool(name, args)
+
         if not self.session:
-            raise RuntimeError("MCP session not initialized. Call connect_to_server first.")
+            raise RuntimeError("MCP session not initialized. Call connect_to_server or connect_to_remote_server first.")
         return await self.session.call_tool(name, args)
 
     async def get_mcp_tools(self):
         """
-        Get the different tools from de server
+        Get the different tools from the server (remote or local)
         """
         try:
             self.logger.info("Requesting MCP tools from the server.")
-            response = await self.session.list_tools()
-            tools = response.tools
-            return tools
+            if self.remote_client:
+                response = await self.remote_client.list_tools()
+                return response
+            else:
+                response = await self.session.list_tools()
+                if hasattr(response, "tools"):
+                    return response.tools
+                # Fallback
+                if isinstance(response, list):
+                    return response
+            raise TypeError(f"Unexpected tools response type: {type(response)}")
+
         except Exception as e:
             self.logger.error(f"Failed to get MCP tools: {str(e)}")
             self.logger.debug(f"Error details: {traceback.format_exc()}")
@@ -175,26 +213,63 @@ class MCPClient:
                             f"Executing tool: {tool_name} with args: {tool_args}"
                         )
                         try:
-                            # turn this one return a simple string
-                            result = await self.session.call_tool(tool_name, tool_args)
+                            # route to local stdio or remote http automatically
+                            result = await self.call_tool(tool_name, tool_args)
                             self.logger.info(f"Tool result: {result}")
-                            # result = test_tool_result_content
+
+                            if self.remote_client:
+                                # Normalize contents -> Anthropic
+                                anth_content = []
+                                for item in (result.content or []):
+                                    if getattr(item, "type", None) == "text" and getattr(item, "text", None) is not None:
+                                        anth_content.append({"type": "text", "text": item.text})
+                                    elif getattr(item, "type", None) == "json" and getattr(item, "json", None) is not None:
+                                        anth_content.append({"type": "json", "json": item.json})
+                                    else:
+                                        anth_content.append({"type": "text", "text": str(getattr(item, "text", item))})
+
+                                tool_result_message = {
+                                    "role": "user",
+                                    "content": [
+                                        {
+                                            "type": "tool_result",
+                                            "tool_use_id": tool_use_id,
+                                            "content": anth_content,
+                                        }
+                                    ],
+                                }
+                            else:
+                                # stdio local
+                                tool_result_message = {
+                                    "role": "user",
+                                    "content": [
+                                        {
+                                            "type": "tool_result",
+                                            "tool_use_id": tool_use_id,
+                                            "content": result.content,
+                                        }
+                                    ],
+                                }
+                            self.messages.append(tool_result_message)
+                            await self.log_conversation(self.messages)
+                            messages.append(tool_result_message)
+
+                        except Exception as e:
+                            error_msg = f"Tool execution failed: {str(e)}"
+                            self.logger.error(error_msg)
                             tool_result_message = {
                                 "role": "user",
                                 "content": [
                                     {
                                         "type": "tool_result",
                                         "tool_use_id": tool_use_id,
-                                        "content": result.content,
+                                        "content": [{"type": "text", "text": error_msg}],
                                     }
                                 ],
                             }
                             self.messages.append(tool_result_message)
                             await self.log_conversation(self.messages)
                             messages.append(tool_result_message)
-                        except Exception as e:
-                            error_msg = f"Tool execution failed: {str(e)}"
-                            self.logger.error(error_msg)
                             raise Exception(error_msg)
 
             return messages
