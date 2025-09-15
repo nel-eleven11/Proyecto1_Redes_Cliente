@@ -12,37 +12,37 @@ class Chatbot:
 
     def display_message(self, message: Dict[str, Any]):
         """
-        Show formated messages
+        Render a single message with nice chat bubbles and tool cards.
         """
+        # User text
+        if message["role"] == "user" and isinstance(message["content"], str):
+            st.chat_message("user", avatar="🧑").markdown(message["content"])
 
-        # display user message
-        if message["role"] == "user" and type(message["content"]) == str:
-            st.chat_message("user").markdown(message["content"])
-
-        # display tool result
-        if message["role"] == "user" and type(message["content"]) == list:
+        # Tool result (assistant reply to a tool call)
+        if message["role"] == "user" and isinstance(message["content"], list):
             for content in message["content"]:
-                if content["type"] == "tool_result":
-                    with st.chat_message("assistant"):
-                        st.write(f"Called tool: {self.current_tool_call['name']}:")
-                        st.json(
-                            {
-                                "name": self.current_tool_call["name"],
-                                "args": self.current_tool_call["args"],
-                                "content": json.loads(content["content"][0]["text"]),
-                            },
-                            expanded=False,
+                if content.get("type") == "tool_result":
+                    with st.chat_message("assistant", avatar="🤖"):
+                        st.markdown(
+                            f"**Tool executed:** `{self.current_tool_call['name']}`", help="Tool call result"
                         )
+                        with st.expander("View result JSON", expanded=False):
+                            st.json(
+                                {
+                                    "tool": self.current_tool_call["name"],
+                                    "args": self.current_tool_call["args"],
+                                    "content": json.loads(content["content"][0]["text"]),
+                                }
+                            )
 
-        # display ai message
-        if message["role"] == "assistant" and type(message["content"]) == str:
-            st.chat_message("assistant").markdown(message["content"])
+        # Assistant text
+        if message["role"] == "assistant" and isinstance(message["content"], str):
+            st.chat_message("assistant", avatar="🤖").markdown(message["content"])
 
-        # store current ai tool use
-        if message["role"] == "assistant" and type(message["content"]) == list:
+        # Assistant tool use (store current call so we can label the result)
+        if message["role"] == "assistant" and isinstance(message["content"], list):
             for content in message["content"]:
-                # ai tool use
-                if content["type"] == "tool_use":
+                if content.get("type") == "tool_use":
                     self.current_tool_call = {
                         "name": content["name"],
                         "args": content["input"],
@@ -53,44 +53,60 @@ class Chatbot:
         Get the tools from the server
         """
         async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
-            response = await client.get(
-                f"{self.api_url}/tools",
-                headers={"Content-Type": "application/json"},
-            )
-            return response.json()
-
+            resp = await client.get(f"{self.api_url}/tools", headers={"Content-Type": "application/json"})
+            resp.raise_for_status()
+            return resp.json()
 
     async def render(self):
         """
-        Render view
+        Render entire UI (sidebar + chat area)
         """
-        st.title("MCP Chatbot Redes")
-
+        # Sidebar: status + tools
         with st.sidebar:
             st.subheader("Settings")
-            st.write("API URL: ", self.api_url)
-            result = await self.get_tools()
+            st.write("API URL:", f"`{self.api_url}`")
+
+            tools = []
+            try:
+                result = await self.get_tools()
+                tools = result.get("tools", [])
+                st.success("Connected to MCP Server", icon="✅")
+            except Exception as e:
+                st.error(f"Server connection failed\n\n{e}", icon="⚠️")
+
             st.subheader("Tools")
-            st.write([tool["name"] for tool in result["tools"]])
+            if tools:
+                pills = " ".join([f"<span class='tool-pill'>{t['name']}</span>" for t in tools])
+                st.markdown(pills, unsafe_allow_html=True)
+            else:
+                st.caption("No tools available")
 
-        # Display existing messages
-        for message in self.messages:
-            self.display_message(message)
+            st.markdown("---")
+            if st.button("🧹 Clear chat", use_container_width=True):
+                st.session_state["messages"] = []
+                self.messages = []
+                st.rerun()
 
-        # Handle new query
-        query = st.chat_input("Enter your query here")
+        # Existing messages
+        for msg in self.messages:
+            self.display_message(msg)
+
+        # New query
+        query = st.chat_input("Type your question or ask me to run a tool…")
         if query:
             async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
                 try:
-                    response = await client.post(
+                    resp = await client.post(
                         f"{self.api_url}/query",
                         json={"query": query},
                         headers={"Content-Type": "application/json"},
                     )
-                    if response.status_code == 200:
-                        messages = response.json()["messages"]
-                        st.session_state["messages"] = messages
-                        for message in st.session_state["messages"]:
-                            self.display_message(message)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    messages = data.get("messages", [])
+                    st.session_state["messages"] = messages
+                    # Re-render freshly
+                    for msg in st.session_state["messages"]:
+                        self.display_message(msg)
                 except Exception as e:
                     st.error(f"Frontend: Error processing query: {str(e)}")
