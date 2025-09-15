@@ -48,4 +48,13 @@ class Chatbot:
                         "args": content["input"],
                     }
 
-    
+    async def get_tools(self):
+        """
+        Get the tools from the server
+        """
+        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+            response = await client.get(
+                f"{self.api_url}/tools",
+                headers={"Content-Type": "application/json"},
+            )
+            return response.json()
