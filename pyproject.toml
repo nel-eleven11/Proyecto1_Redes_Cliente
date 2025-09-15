@@ -10,4 +10,5 @@ dependencies = [
     "fastapi>=0.116.1",
     "mcp>=1.14.0",
     "python-dotenv>=1.1.1",
+    "streamlit>=1.49.1",
 ]
