@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     server_script_path: str = "/home/nelson/Documents/Uvg/Redes/Proyecto1_Redes_MCP/server.py"
     server_project_dir: str = "/home/nelson/Documents/Uvg/Redes/Proyecto1_Redes_MCP"
 
+    #server_script_path: str = "/home/nelson/Documents/Uvg/Redes/Proyecto1_MCP_Servers/git-server/server.py"
+    #server_project_dir: str = "/home/nelson/Documents/Uvg/Redes/Proyecto1_MCP_Servers/git-server"
+
+    server_remote_url: str = "http://127.0.0.1:8080/mcp"
+
 settings = Settings()
 
 
@@ -37,6 +42,25 @@ async def lifespan(app: FastAPI):
         yield
     except Exception as e:
         raise Exception(f"Failed to connect to server: {str(e)}")
+    finally:
+        # Shutdown
+        await client.cleanup()
+
+@asynccontextmanager
+async def lifespan_remote(app: FastAPI):
+    """
+    Manage client startup and shutdown (REMOTE HTTP)
+    """
+    #Startup
+    client = MCPClient()
+    try:
+        ok = await client.connect_to_remote_server(settings.server_remote_url)
+        if not ok:
+            raise Exception("Failed to connect to remote server")
+        app.state.client = client
+        yield
+    except Exception as e:
+        raise Exception(f"Failed to connect to remote server: {str(e)}")
     finally:
         # Shutdown
         await client.cleanup()
